@@ -142,6 +142,7 @@ async def main():
     finally:
         await client.cleanup()
 
+# for testing in isolation locally
 if __name__ == "__main__":
     import sys
     asyncio.run(main())

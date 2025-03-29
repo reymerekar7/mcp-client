@@ -1,39 +1,45 @@
 // src/ChatInterface.js
 import React, { useState } from 'react';
 import axios from 'axios';
-import './ChatInterface.css'; // Create styles for your component
+import './ChatInterface.css';
 
 const ChatInterface = () => {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
-  const [activeServer, setActiveServer] = useState('server1');
+  const [activeServer, setActiveServer] = useState('weather');
 
-  // List of available servers (update these URLs as needed)
+  // List of available servers with their script paths
   const servers = [
-    { id: 'server1', name: 'Server 1', url: 'http://localhost:8000' },
-    { id: 'server2', name: 'Server 2', url: 'http://localhost:8001' }
+    { id: 'weather', name: 'Weather Server', script: 'server/weather.py' },
+    { id: 'github', name: 'GitHub Server', script: 'server/github.py' }
   ];
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
 
-    // Update chat history with user's message
+    // Append user's message
     setChatHistory(prev => [...prev, { sender: 'user', text: message }]);
 
+    // Find the active server's script path
+    const activeServerInfo = servers.find(server => server.id === activeServer);
+    const payload = {
+      query: message,
+      server_script: activeServerInfo.script
+    };
+
+    console.log("Sending payload:", payload);
+
     try {
-      // Call your backend endpoint (e.g., /api/sendMessage)
-      // Pass along the active server selection so your backend can forward the request accordingly.
-      const response = await axios.post('/api/sendMessage', {
-        message,
-        server: activeServer
+      // Assume your FastAPI backend is running at a fixed URL (e.g., http://localhost:8000)
+      const response = await axios.post(`http://127.0.0.1:8000/query`, payload, {
+        headers: { "Content-Type": "application/json" }
       });
-      const reply = response.data.reply;
-      setChatHistory(prev => [...prev, { sender: 'user', text: message }, { sender: 'bot', text: reply }]);
+      const reply = response.data.response;
+      setChatHistory(prev => [...prev, { sender: 'bot', text: reply }]);
     } catch (error) {
       console.error('Error sending message:', error);
       setChatHistory(prev => [...prev, { sender: 'bot', text: 'Error sending message.' }]);
     }
-
     setMessage('');
   };
 
