@@ -1,5 +1,5 @@
 // src/ChatInterface.js
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './ChatInterface.css';
 
@@ -7,6 +7,8 @@ const ChatInterface = () => {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [activeServer, setActiveServer] = useState('weather');
+  const [isLoading, setIsLoading] = useState(false);
+  const chatEndRef = useRef(null);
 
   // List of available servers with their script paths
   const servers = [
@@ -14,44 +16,54 @@ const ChatInterface = () => {
     { id: 'github', name: 'GitHub Server', script: 'server/github.py' }
   ];
 
-  const handleSendMessage = async () => {
-    if (!message.trim()) return;
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
 
-    // Append user's message
+  const handleSendMessage = async (e) => {
+    e?.preventDefault(); // Handle both button click and form submit
+    if (!message.trim() || isLoading) return;
+
+    setIsLoading(true);
     setChatHistory(prev => [...prev, { sender: 'user', text: message }]);
 
-    // Find the active server's script path
     const activeServerInfo = servers.find(server => server.id === activeServer);
     const payload = {
       query: message,
       server_script: activeServerInfo.script
     };
 
-    console.log("Sending payload:", payload);
-
     try {
-      // Assume your FastAPI backend is running at a fixed URL (e.g., http://localhost:8000)
-      const response = await axios.post(`http://127.0.0.1:8000/query`, payload, {
-        headers: { "Content-Type": "application/json" }
-      });
-      const reply = response.data.response;
-      setChatHistory(prev => [...prev, { sender: 'bot', text: reply }]);
+      const response = await axios.post('http://127.0.0.1:8000/query', payload);
+      setChatHistory(prev => [...prev, { 
+        sender: 'bot', 
+        text: response.data.response,
+        server: activeServerInfo.name 
+      }]);
     } catch (error) {
-      console.error('Error sending message:', error);
-      setChatHistory(prev => [...prev, { sender: 'bot', text: 'Error sending message.' }]);
+      console.error('Error:', error);
+      setChatHistory(prev => [...prev, { 
+        sender: 'bot', 
+        text: 'Error: Failed to get response from server.',
+        error: true 
+      }]);
+    } finally {
+      setIsLoading(false);
+      setMessage('');
     }
-    setMessage('');
-  };
-
-  const handleToggleServer = (e) => {
-    setActiveServer(e.target.value);
   };
 
   return (
     <div className="chat-container">
       <div className="server-toggle">
         <label htmlFor="server-select">Active Server: </label>
-        <select id="server-select" value={activeServer} onChange={handleToggleServer}>
+        <select 
+          id="server-select" 
+          value={activeServer} 
+          onChange={(e) => setActiveServer(e.target.value)}
+          disabled={isLoading}
+        >
           {servers.map(server => (
             <option key={server.id} value={server.id}>
               {server.name}
@@ -62,21 +74,31 @@ const ChatInterface = () => {
       
       <div className="chat-history">
         {chatHistory.map((msg, index) => (
-          <div key={index} className={`chat-message ${msg.sender}`}>
-            {msg.text}
+          <div 
+            key={index} 
+            className={`chat-message ${msg.sender} ${msg.error ? 'error' : ''}`}
+          >
+            {msg.sender === 'bot' && msg.server && (
+              <div className="server-tag">{msg.server}</div>
+            )}
+            <div className="message-text">{msg.text}</div>
           </div>
         ))}
+        <div ref={chatEndRef} />
       </div>
       
-      <div className="chat-input">
+      <form onSubmit={handleSendMessage} className="chat-input">
         <input
           type="text"
           value={message}
-          onChange={e => setMessage(e.target.value)}
+          onChange={(e) => setMessage(e.target.value)}
           placeholder="Type your message..."
+          disabled={isLoading}
         />
-        <button onClick={handleSendMessage}>Send</button>
-      </div>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Sending...' : 'Send'}
+        </button>
+      </form>
     </div>
   );
 };

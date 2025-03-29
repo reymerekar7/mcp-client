@@ -48,65 +48,68 @@ class MCPClient:
 
     async def process_query(self, query: str) -> str:
         """Process a query using Claude and available tools"""
-        messages = [
-            {
-                "role": "user",
-                "content": query
-            }
-        ]
-
+        if not self.session:
+            raise ValueError("Server not connected")
+        
+        # Get available tools
         response = await self.session.list_tools()
-        available_tools = [{ 
+        tools = response.tools
+        
+        # Format tools for Claude
+        formatted_tools = [{
+            "type": "custom",
             "name": tool.name,
             "description": tool.description,
             "input_schema": tool.inputSchema
-        } for tool in response.tools]
-
-        # Initial Claude API call
+        } for tool in tools]
+        
+        # Initial message to Claude
+        messages = [{"role": "user", "content": query}]
+        
+        # Make the call to Claude
         response = self.anthropic.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-3-sonnet-20240229",
             max_tokens=1000,
             messages=messages,
-            tools=available_tools
+            tools=formatted_tools
         )
-
-        # Process response and handle tool calls
-        tool_results = []
-        final_text = []
-
+        
+        # Process the response and handle tool calls
+        final_response = []
         for content in response.content:
             if content.type == 'text':
-                final_text.append(content.text)
+                final_response.append(content.text)
             elif content.type == 'tool_use':
-                tool_name = content.name
-                tool_args = content.input
+                # Execute the tool call
+                tool_result = await self.session.call_tool(
+                    content.name,
+                    content.input
+                )
                 
-                # Execute tool call
-                result = await self.session.call_tool(tool_name, tool_args)
-                tool_results.append({"call": tool_name, "result": result})
-                final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
-
-                # Continue conversation with tool results
-                if hasattr(content, 'text') and content.text:
-                    messages.append({
-                      "role": "assistant",
-                      "content": content.text
-                    })
+                # Add tool result to messages for context
                 messages.append({
-                    "role": "user", 
-                    "content": result.content
+                    "role": "assistant",
+                    "content": [content]
                 })
-
-                # Get next response from Claude
-                response = self.anthropic.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": content.id,
+                        "content": tool_result.content
+                    }]
+                })
+                
+                # Get Claude's interpretation of the tool result
+                follow_up = self.anthropic.messages.create(
+                    model="claude-3-sonnet-20240229",
                     max_tokens=1000,
                     messages=messages,
+                    tools=formatted_tools
                 )
-
-                final_text.append(response.content[0].text)
-
-        return "\n".join(final_text)
+                final_response.append(follow_up.content[0].text)
+        
+        return "\n".join(final_response)
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
@@ -131,14 +134,26 @@ class MCPClient:
         await self.exit_stack.aclose()
 
 async def main():
+    """Test the client directly"""
     if len(sys.argv) < 2:
         print("Usage: python client.py <path_to_server_script>")
         sys.exit(1)
-        
+
     client = MCPClient()
     try:
         await client.connect_to_server(sys.argv[1])
-        await client.chat_loop()
+        
+        while True:
+            query = input("\nEnter your query (or 'quit' to exit): ")
+            if query.lower() == 'quit':
+                break
+                
+            try:
+                response = await client.process_query(query)
+                print("\nResponse:", response)
+            except Exception as e:
+                print(f"\nError processing query: {str(e)}")
+                
     finally:
         await client.cleanup()
 
