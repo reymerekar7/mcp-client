@@ -1,52 +1,88 @@
 // src/ChatInterface.js
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import './ChatInterface.css';
+import axios from 'axios';
 
 const ChatInterface = () => {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
-  const [activeServer, setActiveServer] = useState('weather');
   const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef(null);
+  
+  // Server states
+  const [activeServers, setActiveServers] = useState({
+    weather: false,
+    github: false
+  });
 
-  // List of available servers with their script paths
-  const servers = [
-    { id: 'weather', name: 'Weather Server', script: 'server/weather.py' },
-    { id: 'github', name: 'GitHub Server', script: 'server/github.py' }
-  ];
+  const servers = {
+    weather: {
+      name: 'Weather Server',
+      script: 'server/weather.py'
+    },
+    github: {
+      name: 'GitHub Server',
+      script: 'server/github.py'
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
 
+  const handleServerToggle = (serverId) => {
+    setActiveServers(prev => ({
+      ...prev,
+      [serverId]: !prev[serverId]
+    }));
+  };
+
   const handleSendMessage = async (e) => {
-    e?.preventDefault(); // Handle both button click and form submit
+    e?.preventDefault();
     if (!message.trim() || isLoading) return;
+
+    // Check if any server is active
+    const enabledServers = Object.entries(activeServers)
+      .filter(([_, isEnabled]) => isEnabled)
+      .map(([id]) => servers[id]);
+
+    if (enabledServers.length === 0) {
+      setChatHistory(prev => [...prev, {
+        sender: 'system',
+        text: 'Please enable at least one server to process your query.'
+      }]);
+      return;
+    }
 
     setIsLoading(true);
     setChatHistory(prev => [...prev, { sender: 'user', text: message }]);
 
-    const activeServerInfo = servers.find(server => server.id === activeServer);
-    const payload = {
-      query: message,
-      server_script: activeServerInfo.script
-    };
-
     try {
-      const response = await axios.post('http://127.0.0.1:8000/query', payload);
-      setChatHistory(prev => [...prev, { 
-        sender: 'bot', 
-        text: response.data.response,
-        server: activeServerInfo.name 
-      }]);
+      // Send query to each active server
+      const responses = await Promise.all(
+        enabledServers.map(server => 
+          axios.post('http://127.0.0.1:8000/query', {
+            query: message,
+            server_script: server.script
+          })
+        )
+      );
+
+      // Add responses to chat history
+      responses.forEach((response, index) => {
+        setChatHistory(prev => [...prev, {
+          sender: 'bot',
+          text: response.data.response,
+          server: enabledServers[index].name
+        }]);
+      });
     } catch (error) {
       console.error('Error:', error);
-      setChatHistory(prev => [...prev, { 
-        sender: 'bot', 
+      setChatHistory(prev => [...prev, {
+        sender: 'system',
         text: 'Error: Failed to get response from server.',
-        error: true 
+        error: true
       }]);
     } finally {
       setIsLoading(false);
@@ -56,22 +92,23 @@ const ChatInterface = () => {
 
   return (
     <div className="chat-container">
-      <div className="server-toggle">
-        <label htmlFor="server-select">Active Server: </label>
-        <select 
-          id="server-select" 
-          value={activeServer} 
-          onChange={(e) => setActiveServer(e.target.value)}
-          disabled={isLoading}
-        >
-          {servers.map(server => (
-            <option key={server.id} value={server.id}>
-              {server.name}
-            </option>
-          ))}
-        </select>
+      <div className="server-toggles">
+        {Object.entries(servers).map(([id, server]) => (
+          <div key={id} className="server-toggle">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={activeServers[id]}
+                onChange={() => handleServerToggle(id)}
+                disabled={isLoading}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <span className="server-name">{server.name}</span>
+          </div>
+        ))}
       </div>
-      
+
       <div className="chat-history">
         {chatHistory.map((msg, index) => (
           <div 
@@ -86,7 +123,7 @@ const ChatInterface = () => {
         ))}
         <div ref={chatEndRef} />
       </div>
-      
+
       <form onSubmit={handleSendMessage} className="chat-input">
         <input
           type="text"

@@ -1,11 +1,25 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import sys
 from client import MCPClient  # Import the MCPClient from client.py
+import re
 
-app = FastAPI()
+# Store MCP clients
+mcp_clients = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan, handling startup and shutdown"""
+    # Startup: Nothing to initialize for clients yet
+    yield
+    # Shutdown: Clean up all MCP clients
+    for client in mcp_clients.values():
+        await client.cleanup()
+
+app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
@@ -23,8 +37,21 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     response: str
 
-# Create a dictionary to store MCP clients for different servers
-mcp_clients = {}
+def format_tool_result(text: str) -> str:
+    """Extract and format the tool result from the response"""
+    # Extract content between TextContent(...) if it exists
+    tool_match = re.search(r"TextContent\(.*?text='(.*?)'.*?\)", text)
+    if tool_match:
+        content = tool_match.group(1)
+    else:
+        content = text  # If no TextContent wrapper, use the full text
+
+    # Split by \n--- or just \n and clean up
+    parts = re.split(r'\n---|\n', content)
+    formatted_parts = [part.strip() for part in parts if part.strip()]
+    
+    # Rejoin with proper spacing
+    return "\n\n".join(formatted_parts)
 
 @app.post("/query", response_model=QueryResponse)
 async def handle_query(request: QueryRequest):
@@ -46,55 +73,17 @@ async def handle_query(request: QueryRequest):
         
         client = mcp_clients[client_key]
         
-        # Process the query using the client
-        if not client.session:
-            raise HTTPException(status_code=500, detail="Server connection not initialized")
-            
-        # Get available tools
-        tools_response = await client.session.list_tools()
-        tools = tools_response.tools
+        # Process the query
+        response = await client.process_query(request.query)
         
-        # Format tools correctly for Claude's API
-        formatted_tools = [{
-            "type": "custom",
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.inputSchema
-        } for tool in tools]
+        # Format the response
+        formatted_response = format_tool_result(response)
         
-        # Create a message for Claude
-        messages = [{"role": "user", "content": request.query}]
-        
-        # Make the call to Claude with properly formatted tools
-        response = client.anthropic.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1000,
-            messages=messages,
-            tools=formatted_tools
-        )
-        
-        # Process tool calls if any
-        final_response = []
-        for content in response.content:
-            if content.type == 'text':
-                final_response.append(content.text)
-            elif content.type == 'tool_use':  # Changed from tool_calls to tool_use
-                tool_name = content.name
-                tool_args = content.input
-                tool_result = await client.session.call_tool(tool_name, tool_args)
-                final_response.append(f"Tool result: {tool_result.content}")
-        
-        return QueryResponse(response="\n".join(final_response))
+        return QueryResponse(response=formatted_response)
         
     except Exception as e:
-        print(f"Error processing query: {str(e)}")  # Add logging
+        print(f"Error processing query: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # Clean up clients when the server shuts down
-    for client in mcp_clients.values():
-        await client.cleanup()
 
 @app.get("/")
 async def read_root():

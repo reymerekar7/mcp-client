@@ -3,37 +3,100 @@
     display: flex;
     flex-direction: column;
     max-width: 800px;
-    margin: 20px auto;
-    padding: 20px;
+    height: 100vh; /* Take full viewport height */
+    margin: 0 auto; /* Center horizontally */
+    padding: 10px;
     font-family: Arial, sans-serif;
+    box-sizing: border-box; /* Include padding in height calculation */
   }
   
-  .server-toggle {
-    margin-bottom: 20px;
+  .server-toggles {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
     padding: 10px;
     background: #f5f5f5;
     border-radius: 8px;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
   }
   
-  .server-toggle select {
-    margin-left: 10px;
-    padding: 5px;
-    border-radius: 4px;
+  .server-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   
+  /* Smaller Toggle Switch */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px; /* Reduced from 60px */
+    height: 22px; /* Reduced from 34px */
+  }
+  
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .3s;
+    border-radius: 22px;
+  }
+  
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px; /* Reduced from 26px */
+    width: 16px; /* Reduced from 26px */
+    left: 3px; /* Adjusted for new size */
+    bottom: 3px; /* Adjusted for new size */
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+  }
+  
+  input:checked + .toggle-slider {
+    background-color: #2196F3;
+  }
+  
+  input:disabled + .toggle-slider {
+    background-color: #ddd;
+    cursor: not-allowed;
+  }
+  
+  input:checked + .toggle-slider:before {
+    transform: translateX(18px); /* Adjusted for new size */
+  }
+  
+  .server-name {
+    font-size: 13px;
+    color: #333;
+  }
+  
+  /* Make chat history fill available space */
   .chat-history {
-    height: 500px;
+    flex: 1; /* Take remaining vertical space */
+    min-height: 0; /* Allow container to shrink */
     border: 1px solid #ddd;
     border-radius: 8px;
-    padding: 20px;
+    padding: 15px;
     overflow-y: auto;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     background: #fff;
   }
   
   .chat-message {
-    margin: 10px 0;
-    padding: 10px;
+    margin: 8px 0;
+    padding: 8px;
     border-radius: 8px;
     max-width: 80%;
   }
@@ -50,38 +113,47 @@
     color: #333;
   }
   
+  .chat-message.system {
+    margin: 8px auto;
+    background: #fff3cd;
+    color: #856404;
+    text-align: center;
+  }
+  
   .chat-message.error {
     background: #ffebee;
     color: #c62828;
   }
   
   .server-tag {
-    font-size: 0.8em;
+    font-size: 0.75em;
     color: #666;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
   }
   
   .chat-input {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    padding: 5px 0;
   }
   
   .chat-input input {
     flex: 1;
-    padding: 12px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: 14px;
   }
   
   .chat-input button {
-    padding: 12px 24px;
+    padding: 8px 16px;
     background: #007bff;
     color: white;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     transition: background 0.2s;
+    font-size: 14px;
   }
   
   .chat-input button:hover:not(:disabled) {
@@ -91,4 +163,27 @@
   .chat-input button:disabled {
     background: #ccc;
     cursor: not-allowed;
+  }
+  
+  /* Add responsive design */
+  @media (max-width: 600px) {
+    .chat-container {
+      padding: 5px;
+    }
+    
+    .server-toggles {
+      padding: 8px;
+    }
+    
+    .chat-message {
+      max-width: 90%;
+    }
+    
+    .chat-input {
+      flex-direction: column;
+    }
+    
+    .chat-input button {
+      width: 100%;
+    }
   }
