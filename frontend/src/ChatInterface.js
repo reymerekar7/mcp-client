@@ -7,13 +7,11 @@ const ChatInterface = () => {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const chatEndRef = useRef(null);
-  
-  // Server states
   const [activeServers, setActiveServers] = useState({
     weather: false,
     github: false
   });
+  const chatEndRef = useRef(null);
 
   const servers = {
     weather: {
@@ -92,50 +90,52 @@ const ChatInterface = () => {
 
   return (
     <div className="chat-container">
-      <div className="server-toggles">
-        {Object.entries(servers).map(([id, server]) => (
-          <div key={id} className="server-toggle">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={activeServers[id]}
-                onChange={() => handleServerToggle(id)}
-                disabled={isLoading}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <span className="server-name">{server.name}</span>
-          </div>
-        ))}
-      </div>
-
+      <h1 className="chat-title">Custom MCP Client</h1>
       <div className="chat-history">
         {chatHistory.map((msg, index) => (
-          <div 
-            key={index} 
-            className={`chat-message ${msg.sender} ${msg.error ? 'error' : ''}`}
-          >
-            {msg.sender === 'bot' && msg.server && (
-              <div className="server-tag">{msg.server}</div>
-            )}
+          <div key={index} className={`chat-message ${msg.sender}`}>
+            {msg.server && <div className="server-tag">{msg.server}</div>}
             <div className="message-text">{msg.text}</div>
           </div>
         ))}
         <div ref={chatEndRef} />
       </div>
 
-      <form onSubmit={handleSendMessage} className="chat-input">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type your message..."
-          disabled={isLoading}
-        />
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Sending...' : 'Send'}
-        </button>
-      </form>
+      <div className="input-area">
+        <div className="server-toggles">
+          {Object.entries(servers).map(([id, server]) => (
+            <div key={id} className="toggle-container">
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={activeServers[id]}
+                  onChange={() => handleServerToggle(id)}
+                  disabled={isLoading}
+                />
+                <span className="slider"></span>
+              </label>
+              <span className="server-label">{server.name}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="message-input">
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type your message..."
+            disabled={isLoading}
+          />
+          <button 
+            onClick={handleSendMessage} 
+            disabled={isLoading}
+            className="send-button"
+          >
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
